@@ -1,10 +1,4 @@
-export default function Results({
-  wpm,
-  accuracy,
-  correct,
-  incorrect,
-  onRestart,
-}) {
+export default function Results({ wpm, accuracy, onRestart }) {
   return (
     <div className="results-container">
       <div className="results-header">Result</div>
@@ -20,12 +14,6 @@ export default function Results({
           <span className="stat-label">acc</span>
           <span className="stat-value secondary">{accuracy}%</span>
         </div>
-      </div>
-
-      {/* Optional Character Breakdown */}
-      <div className="stat-breakdown">
-        characters: <span className="correct">{correct}</span> /{" "}
-        <span className="incorrect">{incorrect}</span>
       </div>
 
       {/* Restart Button */}

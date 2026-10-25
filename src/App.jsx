@@ -3,7 +3,6 @@ import "./App.css";
 import Results from "./components/Results";
 import TypingBox from "./components/TypingBox";
 import { useEffect, useRef, useState } from "react";
-import rojanTrack from "./assets/10 Cr. - Rojan.mp3";
 
 function generateOfflineTest(wordCount = 25) {
   const selectedWords = [];
@@ -18,79 +17,109 @@ function generateOfflineTest(wordCount = 25) {
 
 export default function App() {
   const [timeLeft, setTimeLeft] = useState(30);
-  const [words, setWords] = useState(generateOfflineTest(50));
+  const [words, setWords] = useState(() => generateOfflineTest(50));
   const [input, setInput] = useState("");
   const [hasStarted, setHasStarted] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [correctChars, setCorrectChars] = useState(0);
   const [incorrectChars, setIncorrectChars] = useState(0);
-
-  const accuracy = Math.round((correctChars / input.length) * 100);
-  const wpm = Math.round(correctChars / 5 / 0.5);
-  const seconds = String(timeLeft).padStart(2, "0");
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const inputRef = useRef(null);
   const timerRef = useRef(null);
-  const audioElementRef = useRef(null);
+  const startTimeRef = useRef(null);
 
-  useEffect(function () {
+  const totalAttempts = correctChars + incorrectChars;
+
+  const accuracy =
+    totalAttempts > 0 ? Math.round((correctChars / totalAttempts) * 100) : 0;
+
+  const wpm =
+    elapsedSeconds > 0
+      ? Math.round(correctChars / 5 / (elapsedSeconds / 60))
+      : 0;
+
+  const seconds = String(timeLeft).padStart(2, "0");
+
+  useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  useEffect(
-    function () {
-      if (!hasStarted) return;
+  useEffect(() => {
+    if (!hasStarted || isFinished) return;
 
-      timerRef.current = setInterval(function () {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            setIsFinished(true);
-            clearInterval(timerRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          setElapsedSeconds((Date.now() - startTimeRef.current) / 1000);
+          setIsFinished(true);
+          return 0;
+        }
 
-      return function () {
-        clearInterval(timerRef.current);
-      };
-    },
-    [hasStarted],
-  );
+        return prev - 1;
+      });
+    }, 1000);
 
-  useEffect(
-    function () {
-      if (isFinished) {
-        audioElementRef.current.play();
-      }
-    },
-    [isFinished],
-  );
+    return () => clearInterval(timerRef.current);
+  }, [hasStarted, isFinished]);
 
   function handleChange(e) {
-    if (timeLeft === 0) return;
+    if (isFinished || timeLeft === 0) return;
+
     const value = e.target.value;
 
-    if (value.length === words.length) {
-      setIsFinished(true);
+    if (!hasStarted && value.length > 0) {
+      startTimeRef.current = Date.now();
+      setHasStarted(true);
     }
+
+    // Count newly entered characters, but not deletions.
+    let prefix = 0;
+
+    while (
+      prefix < input.length &&
+      prefix < value.length &&
+      input[prefix] === value[prefix]
+    ) {
+      prefix++;
+    }
+
+    let oldEnd = input.length;
+    let newEnd = value.length;
+
+    while (
+      oldEnd > prefix &&
+      newEnd > prefix &&
+      input[oldEnd - 1] === value[newEnd - 1]
+    ) {
+      oldEnd--;
+      newEnd--;
+    }
+
+    const inserted = value.slice(prefix, newEnd);
 
     let correct = 0;
     let incorrect = 0;
-    for (let i = 0; i < value.length; i++) {
-      if (value[i] === words[i]) {
+
+    for (let i = 0; i < inserted.length; i++) {
+      if (inserted[i] === words[prefix + i]) {
         correct++;
       } else {
         incorrect++;
       }
     }
-    setCorrectChars(correct);
-    setIncorrectChars(incorrect);
+
+    if (inserted.length > 0) {
+      setCorrectChars((prev) => prev + correct);
+      setIncorrectChars((prev) => prev + incorrect);
+    }
 
     setInput(value);
-    if (!hasStarted && value.length > 0) {
-      setHasStarted(true);
+
+    if (value.length === words.length) {
+      setElapsedSeconds((Date.now() - startTimeRef.current) / 1000);
+      setIsFinished(true);
     }
   }
 
@@ -99,10 +128,16 @@ export default function App() {
   }
 
   function handleRestart() {
+    clearInterval(timerRef.current);
+    startTimeRef.current = null;
+
     setTimeLeft(30);
     setInput("");
-    setIsFinished(false);
     setHasStarted(false);
+    setIsFinished(false);
+    setCorrectChars(0);
+    setIncorrectChars(0);
+    setElapsedSeconds(0);
     setWords(generateOfflineTest(50));
   }
 
@@ -110,6 +145,7 @@ export default function App() {
     <div className="app-container">
       {!isFinished && (
         <TypingBox
+          hasStarted={hasStarted}
           words={words}
           input={input}
           seconds={seconds}
@@ -117,6 +153,7 @@ export default function App() {
           inputRef={inputRef}
           onChange={handleChange}
           onContainerClick={handleContainerClick}
+          onRestart={handleRestart}
         />
       )}
 
@@ -129,11 +166,6 @@ export default function App() {
           onRestart={handleRestart}
         />
       )}
-
-      <audio
-        src={rojanTrack}
-        ref={audioElementRef}
-      ></audio>
     </div>
   );
 }
